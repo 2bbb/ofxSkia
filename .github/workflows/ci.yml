@@ -40,15 +40,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if ! gh release download prebuilt-libs \
-              --repo ${{ github.repository }} \
-              --pattern "ofxSkia-prebuilt-libs-macos.zip" \
-              --dir /tmp/skia-libs 2>/dev/null; then
-            echo "::error::prebuilt-libs release not found."
-            echo "::error::Run the 'Build Prebuilt Libs' workflow manually first:"
-            echo "::error::  gh workflow run build-prebuilt-libs.yml --repo ${{ github.repository }}"
-            exit 1
-          fi
+          gh release download prebuilt-libs \
+            --repo ${{ github.repository }} \
+            --pattern "ofxSkia-prebuilt-libs-macos.zip" \
+            --dir /tmp/skia-libs
           unzip -q /tmp/skia-libs/ofxSkia-prebuilt-libs-macos.zip \
             -d of_root/addons/${{ env.ADDON_NAME }}
 
@@ -103,15 +98,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if ! gh release download prebuilt-libs \
-              --repo ${{ github.repository }} \
-              --pattern "ofxSkia-prebuilt-libs-linux64.zip" \
-              --dir /tmp/skia-libs 2>/dev/null; then
-            echo "::error::prebuilt-libs release not found."
-            echo "::error::Run 'Build Prebuilt Libs' workflow manually first:"
-            echo "::error::  gh workflow run build-prebuilt-libs.yml --repo ${{ github.repository }}"
-            exit 1
-          fi
+          gh release download prebuilt-libs \
+            --repo ${{ github.repository }} \
+            --pattern "ofxSkia-prebuilt-libs-linux64.zip" \
+            --dir /tmp/skia-libs
           unzip -q /tmp/skia-libs/ofxSkia-prebuilt-libs-linux64.zip \
             -d of_root/addons/${{ env.ADDON_NAME }}
 
@@ -136,12 +126,93 @@ jobs:
           path: of_root/libs/openFrameworksCompiled
           key: of-${{ env.OF_VERSION }}-linux-v1
 
-      - name: Build testApp (build-only if no linux libs)
+      - name: Build testApp
+        working-directory: of_root/addons/${{ env.ADDON_NAME }}/testApp
+        run: make -j$(nproc) Release
+
+      - name: Run testApp
         working-directory: of_root/addons/${{ env.ADDON_NAME }}/testApp
         run: |
-          if [ -f "../libs/skia/lib/linux64/libskia.a" ]; then
-            make -j$(nproc) Release
-            xvfb-run make RunRelease
-          else
-            echo "No linux libs — skipping build (run build-prebuilt-libs.yml for linux64 first)"
+          xvfb-run make RunRelease 2>&1 | tee /tmp/run.log
+          CODE=${PIPESTATUS[0]}
+          if [ "$CODE" -ne 0 ]; then
+            echo "::error::testApp failed (exit $CODE)"
+            exit 1
           fi
+
+  build-windows:
+    runs-on: windows-2022
+    env:
+      OF_VERSION: "0.12.1"
+      ADDON_NAME: "ofxSkia"
+    steps:
+      - name: Resolve oF download URL
+        id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          $ASSET = (gh release view "${{ env.OF_VERSION }}" --repo openframeworks/openFrameworks --json assets --jq '.assets[].name') | Where-Object { $_ -match '_vs_release\.' } | Select-Object -First 1
+          echo "asset=$ASSET" >> $env:GITHUB_OUTPUT
+
+      - name: Download oF
+        shell: pwsh
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          $asset = "${{ steps.resolve.outputs.asset }}"
+          curl.exe -sL "https://github.com/openframeworks/openFrameworks/releases/download/${{ env.OF_VERSION }}/$asset" -o $asset
+          Expand-Archive -Path $asset -DestinationPath . -Force
+          Remove-Item $asset
+          $dir = Get-ChildItem -Directory -Filter "of_v*_vs_release*" | Select-Object -First 1
+          if ($dir) { Rename-Item -Path $dir.FullName -NewName "of_root" }
+
+      - name: Checkout addon
+        uses: actions/checkout@v4
+        with:
+          path: of_root/addons/${{ env.ADDON_NAME }}
+
+      - name: Download prebuilt libs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          gh release download prebuilt-libs `
+            --repo ${{ github.repository }} `
+            --pattern "ofxSkia-prebuilt-libs-windows.zip" `
+            --dir C:\skia-libs
+          Expand-Archive -Path C:\skia-libs\ofxSkia-prebuilt-libs-windows.zip `
+            -DestinationPath of_root\addons\${{ env.ADDON_NAME }} -Force
+
+      - name: Cache oF build
+        uses: actions/cache@v4
+        with:
+          path: of_root/libs/openFrameworksCompiled
+          key: of-${{ env.OF_VERSION }}-windows-v1
+
+      - name: Generate project
+        shell: pwsh
+        run: |
+          $pg = "of_root\projectGenerator\resources\app\app\projectGenerator.exe"
+          & $pg --ofPath="of_root" --platforms="vs" "of_root\addons\${{ env.ADDON_NAME }}\testApp"
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build testApp
+        shell: pwsh
+        run: |
+          msbuild "of_root\addons\${{ env.ADDON_NAME }}\testApp\testApp.vcxproj" `
+            /p:configuration=Release /p:platform=x64 /maxCpuCount
+
+      - name: Run testApp
+        shell: pwsh
+        run: |
+          $exe = "of_root\addons\${{ env.ADDON_NAME }}\testApp\bin\testApp.exe"
+          & $exe
+          $code = $LASTEXITCODE
+          if ($code -ne 0) {
+            Write-Host "::error::testApp failed (exit $code)"
+            exit 1
+          }

@@ -52,6 +52,9 @@ Copy-Item out\vs\skia.lib "$libDst\"
 $incDst = Join-Path $OUT_DIR "include"
 New-Item -ItemType Directory -Force -Path $incDst | Out-Null
 robocopy include $incDst *.h /S /NFL /NDL /NJH /NJS | Out-Null
+# modules/skcms/skcms.h is included by include/core/SkColorSpace.h
+New-Item -ItemType Directory -Force -Path "$incDst\modules\skcms" | Out-Null
+Copy-Item "modules\skcms\skcms.h" "$incDst\modules\skcms\"
 
 Pop-Location
 

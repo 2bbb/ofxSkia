@@ -1,0 +1,44 @@
+name: Build Prebuilt Libs
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: brew install ninja
+
+      - name: Fetch depot_tools
+        run: |
+          git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git /tmp/depot_tools
+          echo "/tmp/depot_tools" >> $GITHUB_PATH
+
+      - name: Fetch Skia
+        run: |
+          mkdir /tmp/skia && cd /tmp/skia
+          fetch skia
+          cd skia
+          git checkout chrome/m130
+          python3 tools/git-sync-deps
+
+      - name: Build Skia (arm64 + x64)
+        run: bash scripts/build_skia_macos.sh
+
+      - name: Package libs
+        run: |
+          zip -r ofxSkia-prebuilt-libs-macos.zip libs/
+
+      - name: Publish to prebuilt-libs release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: prebuilt-libs
+          name: Prebuilt Libraries
+          prerelease: true
+          files: ofxSkia-prebuilt-libs-macos.zip

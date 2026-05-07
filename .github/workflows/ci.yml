@@ -1,0 +1,139 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-macos:
+    runs-on: macos-14
+    env:
+      OF_VERSION: "0.12.1"
+      ADDON_NAME: "ofxSkia"
+    steps:
+      - name: Resolve oF download URL
+        id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ASSET=$(gh release view "${{ env.OF_VERSION }}" --repo openframeworks/openFrameworks \
+            --json assets --jq '.assets[].name' | grep -E '_osx_release\.' | head -1)
+          echo "asset=$ASSET" >> $GITHUB_OUTPUT
+
+      - name: Download oF
+        run: |
+          ASSET="${{ steps.resolve.outputs.asset }}"
+          curl -sL "https://github.com/openframeworks/openFrameworks/releases/download/${{ env.OF_VERSION }}/${ASSET}" -o "$ASSET"
+          if [[ "$ASSET" == *.tar.gz ]]; then tar xzf "$ASSET"; else unzip -q "$ASSET"; fi
+          rm -f "$ASSET"
+          mv of_v*_osx_release of_root 2>/dev/null || mv of_v*_osx* of_root
+
+      - name: Checkout addon
+        uses: actions/checkout@v4
+        with:
+          path: of_root/addons/${{ env.ADDON_NAME }}
+
+      - name: Download prebuilt libs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download prebuilt-libs \
+            --repo ${{ github.repository }} \
+            --pattern "ofxSkia-prebuilt-libs-macos.zip" \
+            --dir /tmp/skia-libs
+          unzip -q /tmp/skia-libs/ofxSkia-prebuilt-libs-macos.zip \
+            -d of_root/addons/${{ env.ADDON_NAME }}
+
+      - name: Cache oF build
+        uses: actions/cache@v4
+        with:
+          path: of_root/libs/openFrameworksCompiled
+          key: of-${{ env.OF_VERSION }}-macos-v1
+
+      - name: Build testApp
+        working-directory: of_root/addons/${{ env.ADDON_NAME }}/testApp
+        run: make -j$(sysctl -n hw.ncpu) Release
+
+      - name: Run testApp
+        working-directory: of_root/addons/${{ env.ADDON_NAME }}/testApp
+        run: |
+          make RunRelease 2>&1 | tee /tmp/run.log
+          CODE=${PIPESTATUS[0]}
+          if [ "$CODE" -ne 0 ]; then
+            echo "::error::testApp failed (exit $CODE)"
+            exit 1
+          fi
+
+  build-linux:
+    runs-on: ubuntu-22.04
+    env:
+      OF_VERSION: "0.12.1"
+      ADDON_NAME: "ofxSkia"
+    steps:
+      - name: Resolve oF download URL
+        id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ASSET=$(gh release view "${{ env.OF_VERSION }}" --repo openframeworks/openFrameworks \
+            --json assets --jq '.assets[].name' | grep -E '_linux64.*_release\.' | head -1)
+          echo "asset=$ASSET" >> $GITHUB_OUTPUT
+
+      - name: Download oF
+        run: |
+          ASSET="${{ steps.resolve.outputs.asset }}"
+          curl -sL "https://github.com/openframeworks/openFrameworks/releases/download/${{ env.OF_VERSION }}/${ASSET}" -o "$ASSET"
+          tar xzf "$ASSET" && rm -f "$ASSET"
+          mv of_v*_linux64* of_root
+
+      - name: Checkout addon
+        uses: actions/checkout@v4
+        with:
+          path: of_root/addons/${{ env.ADDON_NAME }}
+
+      - name: Download prebuilt libs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download prebuilt-libs \
+            --repo ${{ github.repository }} \
+            --pattern "ofxSkia-prebuilt-libs-linux64.zip" \
+            --dir /tmp/skia-libs || echo "Linux libs not yet published, skipping"
+          if [ -f /tmp/skia-libs/ofxSkia-prebuilt-libs-linux64.zip ]; then
+            unzip -q /tmp/skia-libs/ofxSkia-prebuilt-libs-linux64.zip \
+              -d of_root/addons/${{ env.ADDON_NAME }}
+          fi
+
+      - name: Install oF dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libunwind-dev libboost-filesystem-dev libboost-system-dev \
+            libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
+            libxxf86vm-dev libx11-dev libgl-dev libglew-dev freeglut3-dev \
+            libglfw3-dev libcurl4-openssl-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+            gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-x \
+            libfreetype6-dev libssl-dev libpulse-dev libasound2-dev \
+            liburiparser-dev libsndfile1-dev libopenal-dev \
+            libassimp-dev libpugixml-dev cmake jq xvfb
+
+      - name: Cache oF build
+        uses: actions/cache@v4
+        with:
+          path: of_root/libs/openFrameworksCompiled
+          key: of-${{ env.OF_VERSION }}-linux-v1
+
+      - name: Build testApp (build-only if no linux libs)
+        working-directory: of_root/addons/${{ env.ADDON_NAME }}/testApp
+        run: |
+          if [ -f "../libs/skia/lib/linux64/libskia.a" ]; then
+            make -j$(nproc) Release
+            xvfb-run make RunRelease
+          else
+            echo "No linux libs — skipping build (run build-prebuilt-libs.yml for linux64 first)"
+          fi

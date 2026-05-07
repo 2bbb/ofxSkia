@@ -40,10 +40,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release download prebuilt-libs \
-            --repo ${{ github.repository }} \
-            --pattern "ofxSkia-prebuilt-libs-macos.zip" \
-            --dir /tmp/skia-libs
+          if ! gh release download prebuilt-libs \
+              --repo ${{ github.repository }} \
+              --pattern "ofxSkia-prebuilt-libs-macos.zip" \
+              --dir /tmp/skia-libs 2>/dev/null; then
+            echo "::error::prebuilt-libs release not found."
+            echo "::error::Run the 'Build Prebuilt Libs' workflow manually first:"
+            echo "::error::  gh workflow run build-prebuilt-libs.yml --repo ${{ github.repository }}"
+            exit 1
+          fi
           unzip -q /tmp/skia-libs/ofxSkia-prebuilt-libs-macos.zip \
             -d of_root/addons/${{ env.ADDON_NAME }}
 
@@ -98,14 +103,17 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release download prebuilt-libs \
-            --repo ${{ github.repository }} \
-            --pattern "ofxSkia-prebuilt-libs-linux64.zip" \
-            --dir /tmp/skia-libs || echo "Linux libs not yet published, skipping"
-          if [ -f /tmp/skia-libs/ofxSkia-prebuilt-libs-linux64.zip ]; then
-            unzip -q /tmp/skia-libs/ofxSkia-prebuilt-libs-linux64.zip \
-              -d of_root/addons/${{ env.ADDON_NAME }}
+          if ! gh release download prebuilt-libs \
+              --repo ${{ github.repository }} \
+              --pattern "ofxSkia-prebuilt-libs-linux64.zip" \
+              --dir /tmp/skia-libs 2>/dev/null; then
+            echo "::error::prebuilt-libs release not found."
+            echo "::error::Run 'Build Prebuilt Libs' workflow manually first:"
+            echo "::error::  gh workflow run build-prebuilt-libs.yml --repo ${{ github.repository }}"
+            exit 1
           fi
+          unzip -q /tmp/skia-libs/ofxSkia-prebuilt-libs-linux64.zip \
+            -d of_root/addons/${{ env.ADDON_NAME }}
 
       - name: Install oF dependencies
         run: |

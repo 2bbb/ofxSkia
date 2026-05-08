@@ -75,6 +75,8 @@ skia_use_wuffs=false
 skia_use_zlib=true
 skia_use_libavif=false
 skia_use_libjxl_decode=false
+extra_cflags=["/MD"]
+extra_ldflags=["/DEFAULTLIB:msvcrt.lib"]
 "@
 # Use WriteAllText for BOM-free UTF-8 — Set-Content -Encoding UTF8 adds BOM
 # which GN rejects with "Invalid token" at 1:1.

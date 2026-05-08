@@ -1,6 +1,9 @@
 # Build skia.lib for Windows (MSVC x64).
 # Run fetch_skia_windows.ps1 first.
-param()
+# Usage:
+#   .\build_skia_windows.ps1           # Release (/MD,  is_debug=false)
+#   .\build_skia_windows.ps1 -Debug    # Debug   (/MDd, is_debug=true)
+param([switch]$Debug)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
@@ -45,11 +48,27 @@ $env:Path = "$SKIA_DIR\third_party\ninja;$env:Path"
 Write-Host "==> Syncing third-party dependencies..."
 python tools/git-sync-deps
 
+# ── Configuration ─────────────────────────────────────────────────────────────
+
+if ($Debug) {
+    $outSubdir = "out\vs_debug"
+    $isDebug   = "true"
+    $cflags    = '"/MDd"'
+    $ldflags   = '"/DEFAULTLIB:msvcrtd.lib"'
+    $libDst    = Join-Path $OUT_DIR "lib\vs\debug"
+} else {
+    $outSubdir = "out\vs"
+    $isDebug   = "false"
+    $cflags    = '"/MD"'
+    $ldflags   = '"/DEFAULTLIB:msvcrt.lib"'
+    $libDst    = Join-Path $OUT_DIR "lib\vs"
+}
+
 # Write args.gn directly — avoids PowerShell stripping double-quotes from
 # string literals like target_os="win" when passed via --args= on the command line.
-New-Item -ItemType Directory -Force -Path "out\vs" | Out-Null
+New-Item -ItemType Directory -Force -Path $outSubdir | Out-Null
 $argsContent = @"
-is_debug=false
+is_debug=$isDebug
 target_os="win"
 target_cpu="x64"
 skia_use_gl=false
@@ -67,30 +86,48 @@ skia_enable_svg=false
 skia_use_expat=false
 skia_use_libjpeg_turbo_decode=false
 skia_use_libjpeg_turbo_encode=false
-skia_use_libpng_decode=false
-skia_use_libpng_encode=false
+skia_use_libpng_decode=true
+skia_use_libpng_encode=true
 skia_use_libwebp_decode=false
 skia_use_libwebp_encode=false
 skia_use_wuffs=true
 skia_use_zlib=true
 skia_use_libavif=false
 skia_use_libjxl_decode=false
-extra_cflags=["/MD"]
-extra_ldflags=["/DEFAULTLIB:msvcrt.lib"]
+extra_cflags=[$cflags]
+extra_ldflags=[$ldflags]
 "@
 # Use WriteAllText for BOM-free UTF-8 — Set-Content -Encoding UTF8 adds BOM
 # which GN rejects with "Invalid token" at 1:1.
 [System.IO.File]::WriteAllText(
-    (Join-Path (Get-Location) "out\vs\args.gn"),
+    (Join-Path (Get-Location) "$outSubdir\args.gn"),
     $argsContent
 )
 
-bin\gn gen out\vs
-ninja -C out\vs skia
+bin\gn gen $outSubdir
+ninja -C $outSubdir skia
 
-$libDst = Join-Path $OUT_DIR "lib\vs"
 New-Item -ItemType Directory -Force -Path $libDst | Out-Null
-Copy-Item out\vs\skia.lib "$libDst\"
+
+# Merge satellite libs (libpng, zlib, freetype2, skcms, expat) into skia.lib so
+# callers only need to link one file. lib.exe is bundled with VS.
+$vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+$vsInstall = & $vsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+$libExe = Get-ChildItem -Path $vsInstall -Filter "lib.exe" -Recurse -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -match "x64\\lib\.exe$" } |
+    Select-Object -First 1 -ExpandProperty FullName
+if (-not $libExe) { Write-Error "lib.exe not found under $vsInstall"; exit 1 }
+
+Write-Host "==> Merging satellite libs into skia.lib using: $libExe"
+$satelliteLibs = @("$outSubdir\libpng.lib", "$outSubdir\zlib.lib", "$outSubdir\freetype2.lib",
+                   "$outSubdir\skcms.lib", "$outSubdir\expat.lib")
+$existingSatellites = $satelliteLibs | Where-Object { Test-Path $_ }
+$mergeArgs = @("/OUT:$outSubdir\skia_merged.lib", "$outSubdir\skia.lib") + $existingSatellites
+& $libExe @mergeArgs
+if ($LASTEXITCODE -ne 0) { Write-Error "lib.exe merge failed"; exit 1 }
+Move-Item -Force "$outSubdir\skia_merged.lib" "$outSubdir\skia.lib"
+
+Copy-Item "$outSubdir\skia.lib" "$libDst\"
 
 $incDst = Join-Path $OUT_DIR "include"
 New-Item -ItemType Directory -Force -Path $incDst | Out-Null

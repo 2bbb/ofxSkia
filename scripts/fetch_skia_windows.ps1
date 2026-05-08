@@ -4,35 +4,58 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+# ── Tool resolver ─────────────────────────────────────────────────────────────
+
+function Resolve-Tool {
+    param(
+        [string]$Name,
+        [string[]]$KnownPaths,
+        [string]$InstallHint
+    )
+    if (Get-Command $Name -ErrorAction SilentlyContinue) { return }
+
+    foreach ($dir in $KnownPaths) {
+        if (Test-Path (Join-Path $dir "$Name.exe")) {
+            Write-Host "==> $Name not in PATH, using: $dir"
+            $env:Path = "$dir;$env:Path"
+            return
+        }
+    }
+
+    Write-Error @"
+ERROR: '$Name' not found in PATH or known install locations.
+$InstallHint
+After installing, restart PowerShell and re-run.
+"@
+    exit 1
+}
+
 # ── Prerequisite checks ───────────────────────────────────────────────────────
 
 # git
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    Write-Error @"
-ERROR: git not found in PATH.
-Install it with:
-    winget install Git.Git
-Then restart PowerShell and re-run this script.
-"@
-    exit 1
-}
+Resolve-Tool git `
+    -KnownPaths @(
+        "C:\Program Files\Git\bin",
+        "C:\Program Files\Git\cmd"
+    ) `
+    -InstallHint "Install git with:  winget install Git.Git"
 
 # python — must exist and must NOT be the Microsoft Store stub
-if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
-    Write-Error @"
-ERROR: python not found in PATH.
-Install it with:
-    winget install Python.Python.3.12
-Then restart PowerShell and re-run this script.
-"@
-    exit 1
-}
+Resolve-Tool python `
+    -KnownPaths @(
+        "$env:LOCALAPPDATA\Programs\Python\Python312",
+        "$env:LOCALAPPDATA\Programs\Python\Python311",
+        "$env:LOCALAPPDATA\Programs\Python\Python310",
+        "C:\Python312",
+        "C:\Python311"
+    ) `
+    -InstallHint "Install python with:  winget install Python.Python.3.12"
+
 $pythonPath = (Get-Command python).Source
 if ($pythonPath -like "*WindowsApps*") {
     Write-Error @"
 ERROR: 'python' resolves to the Microsoft Store stub:
     $pythonPath
-This stub does not work for Skia's build tools.
 Fix: Settings -> Apps -> App execution aliases -> disable python.exe and python3.exe.
 Then install the real Python:
     winget install Python.Python.3.12

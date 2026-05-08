@@ -36,6 +36,12 @@ if (-not (Test-Path "bin\gn.exe")) {
     python bin/fetch-gn
 }
 
+if (-not (Test-Path "third_party\ninja\ninja.exe")) {
+    Write-Host "==> Fetching ninja..."
+    python bin/fetch-ninja
+}
+$env:Path = "$SKIA_DIR\third_party\ninja;$env:Path"
+
 Write-Host "==> Syncing third-party dependencies..."
 python tools/git-sync-deps
 

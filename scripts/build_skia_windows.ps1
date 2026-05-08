@@ -42,7 +42,7 @@ python tools/git-sync-deps
 # Write args.gn directly — avoids PowerShell stripping double-quotes from
 # string literals like target_os="win" when passed via --args= on the command line.
 New-Item -ItemType Directory -Force -Path "out\vs" | Out-Null
-@"
+$argsContent = @"
 is_debug=false
 target_os="win"
 target_cpu="x64"
@@ -69,7 +69,13 @@ skia_use_wuffs=false
 skia_use_zlib=true
 skia_use_libavif=false
 skia_use_libjxl_decode=false
-"@ | Set-Content "out\vs\args.gn" -Encoding UTF8
+"@
+# Use WriteAllText for BOM-free UTF-8 — Set-Content -Encoding UTF8 adds BOM
+# which GN rejects with "Invalid token" at 1:1.
+[System.IO.File]::WriteAllText(
+    (Join-Path (Get-Location) "out\vs\args.gn"),
+    $argsContent
+)
 
 bin\gn gen out\vs
 ninja -C out\vs skia

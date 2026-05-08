@@ -76,9 +76,9 @@ echo "==> Copying public headers..."
 mkdir -p "${OUT_DIR}/include"
 rsync -a --include="*/" --include="*.h" --exclude="*" \
       include/ "${OUT_DIR}/include/"
-# modules/skcms/skcms.h is included by include/core/SkColorSpace.h
-mkdir -p "${OUT_DIR}/include/modules/skcms"
-cp modules/skcms/skcms.h "${OUT_DIR}/include/modules/skcms/"
+# modules/skcms/skcms.h: ADDON_INCLUDES=libs/skia, so path is libs/skia/modules/skcms/skcms.h
+mkdir -p "${OUT_DIR}/modules/skcms"
+cp modules/skcms/skcms.h "${OUT_DIR}/modules/skcms/"
 
 echo ""
 echo "==> Done."

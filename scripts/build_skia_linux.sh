@@ -45,8 +45,8 @@ cp out/linux64/libskia.a "${OUT_DIR}/lib/linux64/"
 
 mkdir -p "${OUT_DIR}/include"
 rsync -a --include="*/" --include="*.h" --exclude="*" include/ "${OUT_DIR}/include/"
-mkdir -p "${OUT_DIR}/include/modules/skcms"
-cp modules/skcms/skcms.h "${OUT_DIR}/include/modules/skcms/"
+mkdir -p "${OUT_DIR}/modules/skcms"
+cp modules/skcms/skcms.h "${OUT_DIR}/modules/skcms/"
 
 echo "Done: ${OUT_DIR}/lib/linux64/libskia.a"
 file "${OUT_DIR}/lib/linux64/libskia.a"

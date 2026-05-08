@@ -39,22 +39,39 @@ if (-not (Test-Path "bin\gn.exe")) {
 Write-Host "==> Syncing third-party dependencies..."
 python tools/git-sync-deps
 
-$GN_ARGS = @"
+# Write args.gn directly — avoids PowerShell stripping double-quotes from
+# string literals like target_os="win" when passed via --args= on the command line.
+New-Item -ItemType Directory -Force -Path "out\vs" | Out-Null
+@"
 is_debug=false
-target_os="win" target_cpu="x64"
-skia_use_gl=false skia_use_metal=false skia_use_vulkan=false skia_use_dawn=false
-skia_enable_skparagraph=false skia_enable_skshaper=false
-skia_use_harfbuzz=false skia_use_icu=false
-skia_use_freetype=true skia_use_system_freetype2=false
-skia_enable_pdf=true skia_enable_svg=false skia_use_expat=false
-skia_use_libjpeg_turbo_decode=false skia_use_libjpeg_turbo_encode=false
-skia_use_libpng_decode=false skia_use_libpng_encode=false
-skia_use_libwebp_decode=false skia_use_libwebp_encode=false
-skia_use_wuffs=false skia_use_zlib=true
-skia_use_libavif=false skia_use_libjxl_decode=false
-"@
+target_os="win"
+target_cpu="x64"
+skia_use_gl=false
+skia_use_metal=false
+skia_use_vulkan=false
+skia_use_dawn=false
+skia_enable_skparagraph=false
+skia_enable_skshaper=false
+skia_use_harfbuzz=false
+skia_use_icu=false
+skia_use_freetype=true
+skia_use_system_freetype2=false
+skia_enable_pdf=true
+skia_enable_svg=false
+skia_use_expat=false
+skia_use_libjpeg_turbo_decode=false
+skia_use_libjpeg_turbo_encode=false
+skia_use_libpng_decode=false
+skia_use_libpng_encode=false
+skia_use_libwebp_decode=false
+skia_use_libwebp_encode=false
+skia_use_wuffs=false
+skia_use_zlib=true
+skia_use_libavif=false
+skia_use_libjxl_decode=false
+"@ | Set-Content "out\vs\args.gn" -Encoding UTF8
 
-bin\gn gen out\vs ("--args=" + ($GN_ARGS -replace "`n", " "))
+bin\gn gen out\vs
 ninja -C out\vs skia
 
 $libDst = Join-Path $OUT_DIR "lib\vs"

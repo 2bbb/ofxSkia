@@ -9,6 +9,9 @@ common:
 	ADDON_INCLUDES = src
 	ADDON_INCLUDES += libs/skia
 	ADDON_CPPFLAGS = -DSK_TRIVIAL_ABI=[[clang::trivial_abi]]
+	# ofxSkia.cpp is the unity-build entry for Xcode; exclude individual TUs from make
+	ADDON_SOURCES_EXCLUDE = src/ofxSkiaSurface.cpp
+	ADDON_SOURCES_EXCLUDE += src/ofxSkiaStubs.cpp
 
 osx:
 	ADDON_LIBS = libs/skia/lib/osx/libskia.a

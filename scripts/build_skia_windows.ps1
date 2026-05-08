@@ -4,7 +4,22 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+# ── Prerequisite checks ───────────────────────────────────────────────────────
+
 $DEPOT_TOOLS_DIR = "C:\depot_tools"
+$env:Path = "$DEPOT_TOOLS_DIR;$env:Path"
+$env:DEPOT_TOOLS_WIN_TOOLCHAIN = "0"
+
+if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+    Write-Error "ERROR: python not found. Run fetch_skia_windows.ps1 first (it checks prerequisites)."
+    exit 1
+}
+$pythonPath = (Get-Command python).Source
+if ($pythonPath -like "*WindowsApps*") {
+    Write-Error "ERROR: 'python' is the Microsoft Store stub ($pythonPath). See fetch_skia_windows.ps1 for fix."
+    exit 1
+}
+
 $SKIA_DIR = "C:\skia\skia"
 $SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
 $OUT_DIR = Join-Path $SCRIPT_DIR "..\libs\skia"
@@ -13,9 +28,6 @@ if (-not (Test-Path $SKIA_DIR)) {
     Write-Error "ERROR: $SKIA_DIR not found. Run fetch_skia_windows.ps1 first."
     exit 1
 }
-
-$env:Path = "$DEPOT_TOOLS_DIR;$env:Path"
-$env:DEPOT_TOOLS_WIN_TOOLCHAIN = "0"
 
 Push-Location $SKIA_DIR
 

@@ -43,8 +43,8 @@ GN_ARGS_COMMON='
   skia_enable_svg=false
   skia_use_expat=false
 
-  skia_use_libjpeg_turbo_decode=true
-  skia_use_libjpeg_turbo_encode=true
+  skia_use_libjpeg_turbo_decode=false
+  skia_use_libjpeg_turbo_encode=false
   skia_use_libpng_decode=false
   skia_use_libpng_encode=false
   skia_use_libwebp_decode=false

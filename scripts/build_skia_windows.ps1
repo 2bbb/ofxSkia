@@ -35,7 +35,7 @@ skia_enable_skparagraph=false skia_enable_skshaper=false
 skia_use_harfbuzz=false skia_use_icu=false
 skia_use_freetype=true skia_use_system_freetype2=false
 skia_enable_pdf=true skia_enable_svg=false skia_use_expat=false
-skia_use_libjpeg_turbo_decode=true skia_use_libjpeg_turbo_encode=true
+skia_use_libjpeg_turbo_decode=false skia_use_libjpeg_turbo_encode=false
 skia_use_libpng_decode=false skia_use_libpng_encode=false
 skia_use_libwebp_decode=false skia_use_libwebp_encode=false
 skia_use_wuffs=false skia_use_zlib=true

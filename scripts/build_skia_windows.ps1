@@ -52,10 +52,10 @@ Copy-Item out\vs\skia.lib "$libDst\"
 $incDst = Join-Path $OUT_DIR "include"
 New-Item -ItemType Directory -Force -Path $incDst | Out-Null
 robocopy include $incDst *.h /S /NFL /NDL /NJH /NJS | Out-Null
-# modules/skcms/skcms.h: ADDON_INCLUDES=libs/skia, so path is libs/skia/modules/skcms/skcms.h
-$modDst = Join-Path $OUT_DIR "modules\skcms"
-New-Item -ItemType Directory -Force -Path $modDst | Out-Null
-Copy-Item "modules\skcms\skcms.h" "$modDst\"
+# modules/skcms/: skcms.h + src/skcms_public.h
+New-Item -ItemType Directory -Force -Path "$OUT_DIR\modules\skcms\src" | Out-Null
+Copy-Item "modules\skcms\skcms.h" "$OUT_DIR\modules\skcms\"
+Copy-Item "modules\skcms\src\skcms_public.h" "$OUT_DIR\modules\skcms\src\"
 # Reset LASTEXITCODE: robocopy returns 1 on success which looks like failure
 $global:LASTEXITCODE = 0
 
